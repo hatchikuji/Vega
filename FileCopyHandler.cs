@@ -5,7 +5,7 @@ namespace Vega;
 
 public class FileCopyHandler
 {
-    private readonly System.Windows.Controls.ProgressBar _progressBar;
+    private readonly System.Windows.Controls.ProgressBar _copyProgressBar;
     private readonly string _login; // User login
     private readonly string _rawPath; // Path to the raw folder
     private readonly string _workPath; // Path to the work folder
@@ -24,7 +24,7 @@ public class FileCopyHandler
 
 
     public FileCopyHandler(string remoteProjectPath, string workPath, string rawPath,
-        System.Windows.Controls.ProgressBar progressBar,
+        System.Windows.Controls.ProgressBar copyProgressBar,
         string login, long totalSize, MainWindow mainWindow, int customBufferSize,
         int maxConcurrency = 4)
     {
@@ -32,7 +32,7 @@ public class FileCopyHandler
         _mainWindow.RemoteProjectPath = remoteProjectPath;
         this._workPath = workPath;
         this._rawPath = rawPath;
-        _progressBar = progressBar;
+        _copyProgressBar = copyProgressBar;
         _login = login;
         _mainWindow.Login = login;
         _totalSize = totalSize;
@@ -197,7 +197,7 @@ public class FileCopyHandler
         var permillage = (int)((double)_completedSize / _totalSize * 1000);
 
         // Updating the progress bar on the UI thread
-        _progressBar.Dispatcher.Invoke(() => _progressBar.Value = permillage);
+        _copyProgressBar.Dispatcher.Invoke(() => _copyProgressBar.Value = permillage);
     }
 
     public void Pause()
