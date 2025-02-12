@@ -1,0 +1,138 @@
+﻿<Window x:Class="Vega.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Vega"
+        mc:Ignorable="d"
+        Title="Vega V2.2.1" Icon="ico/vega32.ico" Width="800" Height="500" WindowStartupLocation="CenterScreen" ResizeMode="CanMinimize">
+
+
+    <Grid>
+        <!-- Define Rows and Columns -->
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <!--Host, Host Text Box, List of drives, List of drives selection -->
+            <RowDefinition Height="Auto" />
+            <!-- Login, Login Text Box, Project code, Project code Text Box, Search Button -->
+            <RowDefinition Height="Auto" />
+            <!-- Password, Password Text Box, Project full name -->
+            <RowDefinition Height="Auto" />
+            <!-- Saving, Saving Text Box, Browse Button -->
+            <RowDefinition Height="Auto" />
+            <!-- Connect button, Encrypt Button, Mount Button -->
+            <RowDefinition Height="Auto" />
+            <!-- Copy, Dismount button -->
+            <RowDefinition Height="*" />
+            <RowDefinition />
+            <RowDefinition />
+            <RowDefinition />
+            <RowDefinition />
+            <!-- File list -->
+        </Grid.RowDefinitions>
+
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="2*" />
+            <!-- Column 0 -->
+            <ColumnDefinition Width="3*" />
+            <!-- Column 1 -->
+        </Grid.ColumnDefinitions>
+
+        <!-- Host -->
+        <Label Content="Host:" Grid.Row="0" Grid.Column="0" Margin="10" VerticalAlignment="Center"
+               ToolTip="The computer you want to retreive the project from."/>
+        <TextBox Name="ComputerName" Grid.Row="0" Grid.Column="0" Margin="70,10,10,10" HorizontalAlignment="Stretch" />
+
+        <!-- Login form -->
+        <Label Content="Login:" Grid.Row="1" Grid.Column="0" Margin="10" VerticalAlignment="Center"
+               ToolTip="The username of the network's user"/>
+        <TextBox Name="LoginBox" Grid.Row="1" Grid.Column="0" Margin="70,10,10,10" HorizontalAlignment="Stretch" />
+
+        <!-- Password form -->
+        <Label Content="Password:" Grid.Row="2" Grid.Column="0" Margin="10" VerticalAlignment="Center"
+               ToolTip="The password of the network's user"/>
+        <PasswordBox Name="PasswordBox" Grid.Row="2" Grid.Column="0" Margin="70,10,10,10" HorizontalAlignment="Stretch" />
+
+        <!-- Connection and Disconnect button -->
+        <Button Name="ConnectButton" Click="ConnectButton_OnClick" Content="Connect" Grid.Row="3" Grid.Column="0"
+                HorizontalAlignment="Left" Margin="10,10,10,10" Width="100" />
+
+        <Button Name="DisconnectButton" Click="DisconnectButton_OnClick" Content="Disconnect" Grid.Row="3" Grid.Column="0"
+                HorizontalAlignment="Right" Margin="10,10,10,10" Width="100" IsEnabled="False"/>
+
+        <!-- List of drives -->
+        <Label Content="List of drives:" Grid.Row="0" Grid.Column="1" Margin="10" VerticalAlignment="Center"
+               ToolTip="The list of drive where the project is."/>
+        <ComboBox Name="DriveList" Grid.Row="0" Grid.Column="1" Margin="120,10,10,10" HorizontalAlignment="Stretch"
+                  IsEnabled="True" />
+
+        <!-- Project search -->
+        <Label Content="Project:" Grid.Row="1" Grid.Column="1" Margin="10" VerticalAlignment="Center"
+               ToolTip="The client's code or name of the project"/>
+        <TextBox Name="ProjectBox" Grid.Row="1" Grid.Column="1" Margin="120,10,0,10" IsEnabled="True"
+                 IsReadOnly="True" Cursor="Arrow" HorizontalAlignment="Left" Width="300" />
+        <Button Name="SearchButton" Click="SearchButton_OnClick" Content=". . ." Grid.Row="1" Grid.Column="1"
+                Margin="10,10,10,10" Width="30" HorizontalAlignment="Right" IsEnabled="True" />
+
+        <!-- Saving file -->
+        <Label Content="Saving path:" Grid.Row="2" Grid.Column="1" Margin="10" VerticalAlignment="Center"
+               ToolTip="The folder/external drive where&#x0a;you want to save the project's container(s)."/>
+        <TextBox Name="SavingField" Grid.Row="2" Grid.Column="1" Margin="120,10,0,10" IsEnabled="True"
+                 IsReadOnly="True" Cursor="Arrow" HorizontalAlignment="Left" Width="300" />
+        <Button Name="BrowseButton" Click="BrowseButton_OnClick" Content=". . ." Grid.Row="2" Grid.Column="1"
+                Margin="10,10,10,10" Width="30" HorizontalAlignment="Right" IsEnabled="True" />
+
+        <!-- Project selection -->
+        <TextBox Name="ProjectDisplayed" Grid.Row="3" Grid.Column="1" Width="Auto" VerticalAlignment="Center" ToolTip=""
+                 Cursor="Arrow" IsReadOnly="True" BorderThickness="0" HorizontalAlignment="Center" />
+
+        <!-- Encryption and loading button -->
+        <Button Name="EncryptButton" Click="EncryptLoadButton_OnClick" Content="Generate the volume(s)" Grid.Row="4" Grid.Column="1"
+                Width="Auto" VerticalAlignment="Center" Margin="80,10,10,10" HorizontalAlignment="Left" IsEnabled="True" />
+
+
+        <!-- Copy button -->
+        <Button Name="CopyButton" Click="CopyUnloadButton_OnClick" Content="Copy files" Grid.Row="4" Grid.Column="1"
+                Margin="10,10,80,10" Width="Auto" HorizontalAlignment="Right" IsEnabled="True" />
+
+        <!-- File List -->
+        <Label Content="File List:" Grid.Row="5" Grid.Column="0" Margin="10,0,10,10" VerticalAlignment="Top"
+               ToolTip="The list of files that will be encrypted"/>
+        <ListView Name="FileListContent" Grid.Row="5" Grid.RowSpan="6" Grid.Column="0" Margin="10,30,10,10"
+                  SelectionMode="Multiple"
+                  ToolTip="The list of files that will be encrypted.">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Header="Name" DisplayMemberBinding="{Binding Name}" Width="270" />
+                </GridView>
+            </ListView.View>
+        </ListView>
+
+        <!-- Progress bar -->
+        <Label Name="ProgressStatus" Content="" HorizontalContentAlignment="Center" Grid.Row="7" Grid.Column="1"
+               Width="Auto" Margin="10,0,10,15" VerticalAlignment="Center"/>
+        <ProgressBar Name="ProgressBar" Grid.Row="8" Grid.Column="1" HorizontalAlignment="Left" Width="370" Margin="0,10,10,10"
+                     Visibility="Hidden" Value="0" Maximum="1000" IsIndeterminate="False" Foreground="#33CC33"/>
+        <Button Name="PauseButton" Click="PauseButton_OnClick" Content="Pause" Grid.Row="8" Grid.Column="1" Width="80" HorizontalAlignment="Right" Height="20"
+                VerticalAlignment="Center" IsEnabled="False" Margin="10,10,10,10" ToolTip="Pause or resume the copy"/>
+
+
+        <!-- Sliders -->
+        <!-- Work factor -->
+        <StackPanel Grid.Column="1" Grid.Row="10" HorizontalAlignment="Left" Width="200" Height="Auto">
+            <TextBox Name="WorkFactor" Text="WORK DATA SIZE:" IsReadOnly="True" Cursor="Arrow" Focusable="False"
+                     BorderThickness="0"
+                     ToolTip="Adjust the work factor to increase or decrease&#x0a;the size needed for the encrypted volume." />
+            <Slider Name="WorkSlider" ValueChanged="WorkSlider_OnValueChanged" Minimum="1.09" TickFrequency="0.1"
+                    Ticks="0.01" TickPlacement="BottomRight" Maximum="1.75" />
+        </StackPanel>
+        <!-- Raw factor -->
+        <StackPanel Grid.Column="1" Grid.Row="10" HorizontalAlignment="Right" Width="200" Height="Auto">
+            <TextBox Name="RawFactor" Text="RAW DATA SIZE:" IsReadOnly="True" Cursor="Arrow" Focusable="False"
+                     BorderThickness="0"
+                     ToolTip="Adjust the raw factor to increase or decrease&#x0a;the size needed for the encrypted volume." />
+            <Slider Name="RawSlider" ValueChanged="RawSlider_OnValueChanged" Minimum="1.09" TickFrequency="0.01"
+                    Ticks="0.01" TickPlacement="BottomRight" Maximum="1.75" />
+        </StackPanel>
+    </Grid>
+</Window>
