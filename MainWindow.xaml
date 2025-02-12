@@ -155,7 +155,7 @@
                 </StackPanel>
             </Grid>
         </TabItem>
-        <TabItem Header="Upload" Name="UploadTab" Width="Auto" IsSelected="true">
+        <TabItem Header="Upload" Name="UploadTab" MouseDoubleClick="UploadTab_OnMouseDoubleClick" Width="Auto" IsSelected="true">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
