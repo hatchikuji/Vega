@@ -6,6 +6,7 @@ using System.Net.NetworkInformation;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using Brushes = System.Windows.Media.Brushes;
 using Button = System.Windows.Controls.Button;
@@ -945,7 +946,7 @@ public partial class MainWindow
             double sizeTxt = _totalSize / 1024.0 * 1024.0 * 1024.0;
 
             dockPanel.Children.Add(new TextBlock
-                { Text = $"Size: {Math.Round(sizeTxt, MidpointRounding.ToZero)}", FontWeight = FontWeights.Bold });
+                { Text = $"Size: {Math.Round(sizeTxt,3, MidpointRounding.ToZero)}GB", FontWeight = FontWeights.Bold });
             dockPanel.Children.Add(new TextBlock { Text = ", ", FontWeight = FontWeights.Thin });
             dockPanel.Children.Add(new TextBlock
             {
@@ -1017,8 +1018,7 @@ public partial class MainWindow
             item.IsSelected = false;
         }
     }
-
-
+    
     private void Upload_OnClick(object sender, RoutedEventArgs e)
     {
         foreach (ListBoxItem item in UploadListBox.Items)
@@ -1036,5 +1036,57 @@ public partial class MainWindow
         }
     }
 
+    
+    
     #endregion
+
+    private void UploadTab_OnMouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (!Path.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "RClone",
+                "rclone.exe")))
+        {
+            try
+            {
+                MessageBoxResult result = MessageBox.Show("Rclone not detected do you want to install it ?", "Notice", MessageBoxButton.YesNo, MessageBoxImage.Information);
+                if (result == MessageBoxResult.No)
+                {
+                    return;
+                }
+                
+                string[] argsList =
+                [
+                    "",
+                    ""
+                ];
+                
+                string args = string.Join(" ", argsList);
+                ProcessStartInfo rcloneInstall = new()
+                {
+                    Verb = "runas",
+                    LoadUserProfile = true,
+                    FileName = "powershell.exe",
+                    Arguments = args,
+                    UseShellExecute = true,
+                    CreateNoWindow = false,
+                    WindowStyle = ProcessWindowStyle.Normal
+                };
+                Process rcloneProcess = Process.Start(rcloneInstall) ?? throw new InvalidOperationException();
+                rcloneProcess.WaitForExit();
+                rcloneProcess.Close();
+                if (rcloneProcess.ExitCode != 0)
+                {
+                    MessageBox.Show(rcloneProcess.StandardError.ReadToEnd(), "ERROR", MessageBoxButton.OK, MessageBoxImage.Error);
+                    LoggingEvent("rclone_install", Login!, "Could not install rclone.");
+                    return;
+                }
+                UploadTab.IsSelected = true;
+                
+            }
+            catch (Exception exception)
+            {
+                Console.WriteLine(exception);
+                throw;
+            }
+        }
+    }
 }
