@@ -5,7 +5,9 @@ using System.IO;
 using System.Net.NetworkInformation;
 using System.Text;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
+using Brushes = System.Windows.Media.Brushes;
 using Button = System.Windows.Controls.Button;
 using Color = System.Windows.Media.Color;
 using Directory = System.IO.Directory;
@@ -65,7 +67,7 @@ public partial class MainWindow
     private string _rawLowerLetter = "";
 
     // Color for the progress bar
-    private readonly SolidColorBrush _windowsOrange = new(Color.FromArgb(255,244,180,0));
+    private readonly SolidColorBrush _windowsOrange = new(Color.FromArgb(255, 244, 180, 0));
     private readonly SolidColorBrush _windowsGreen = new(Color.FromArgb(255, 51, 204, 51));
 
 
@@ -83,6 +85,8 @@ public partial class MainWindow
 
     private static readonly string
         Loggingfolderpath = Directory.GetCurrentDirectory(); // Path to the logging folder
+
+    private static readonly List<Dir> ListCopied = new List<Dir>();
 
     private string? _computerName = "";
 
@@ -351,12 +355,12 @@ public partial class MainWindow
     {
         if (state)
         {
-            foreach (TextBox textBox in FindVisualChildren<TextBox>(this))
+            foreach (TextBox textBox in FindVisualChildren<TextBox>(this.CopyTab))
             {
                 textBox.IsEnabled = false;
             }
 
-            foreach (Button button in FindVisualChildren<Button>(this))
+            foreach (Button button in FindVisualChildren<Button>(this.CopyTab))
             {
                 button.IsEnabled = false;
             }
@@ -385,10 +389,11 @@ public partial class MainWindow
             WorkSlider.IsEnabled = true;
             RawSlider.IsEnabled = true;
         }
+
         PauseButton.IsEnabled = false;
     }
 
-    #region Onclick and Onvalue changed methods
+    #region Copy tab
 
     // Used when the user wants to connect to a remote computer
     private void ConnectButton_OnClick(object sender, RoutedEventArgs e)
@@ -427,7 +432,9 @@ public partial class MainWindow
                 catch (Win32Exception ex)
                 {
                     string exMsg = GetSystemMessage((uint)ex.NativeErrorCode);
-                    LoggingEvent("Connexion", Login, $"CAN BE IGNORED: {exMsg}");
+                    // May rise errors about a session already openned, but it is not an issues because the connection
+                    // is still working
+                    LoggingEvent("Connexion", Login, exMsg);
                 }
 
                 ProcessStartInfo processInfo = new()
@@ -589,7 +596,8 @@ public partial class MainWindow
             // Check if the path contains spaces
             if (dialog.SelectedPath.Contains(' '))
             {
-                MessageBox.Show($"The path contains spaces, please choose another one:\n{dialog.SelectedPath}", "WARNING", MessageBoxButton.OK,
+                MessageBox.Show($"The path contains spaces, please choose another one:\n{dialog.SelectedPath}",
+                    "WARNING", MessageBoxButton.OK,
                     MessageBoxImage.Warning);
                 return;
             }
@@ -652,7 +660,7 @@ public partial class MainWindow
 
             // Display the progress bar
             LockUi(true);
-            ProgressUpdate(ProgressBar, ProgressStatus, "Encrypting...", true);
+            ProgressUpdate(CopyProgressBar, ProgressStatus, "Encrypting...", true);
             if (workFolderItems.Count > 0)
             {
                 foreach (Dir dir in workFolderItems)
@@ -695,7 +703,7 @@ public partial class MainWindow
                     }
                     catch (Exception ex)
                     {
-                        ProgressUpdate(ProgressBar, ProgressStatus, "Error while encrypting the WORK DATA", false);
+                        ProgressUpdate(CopyProgressBar, ProgressStatus, "Error while encrypting the WORK DATA", false);
                         MessageBox.Show($"Error while encrypting the WORK DATA: {ex.Message}", "ERROR",
                             MessageBoxButton.OK,
                             MessageBoxImage.Error);
@@ -704,7 +712,6 @@ public partial class MainWindow
                         return;
                     }
                 }
-
             }
 
             if (rawFolderItems.Count > 0)
@@ -750,7 +757,7 @@ public partial class MainWindow
                     }
                     catch (Exception ex)
                     {
-                        ProgressUpdate(ProgressBar, ProgressStatus, "Error while encrypting the RAW DATA", false);
+                        ProgressUpdate(CopyProgressBar, ProgressStatus, "Error while encrypting the RAW DATA", false);
                         MessageBox.Show($"Error while encrypting the RAW DATA: {ex.Message}", "ERROR",
                             MessageBoxButton.OK,
                             MessageBoxImage.Error);
@@ -762,7 +769,7 @@ public partial class MainWindow
             }
 
             // Hides it when the encryption is done
-            ProgressUpdate(ProgressBar, ProgressStatus, "Encryption completed", false);
+            ProgressUpdate(CopyProgressBar, ProgressStatus, "Encryption completed", false);
 
             //
             // LOADING THE CONTAINERS
@@ -781,6 +788,7 @@ public partial class MainWindow
                     letters = letters.Replace(d.Name[0].ToString(), "");
                 }
             }
+
             if (letters.Length < 2)
             {
                 MessageBox.Show("No free drive letter available", "ERROR", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -789,7 +797,7 @@ public partial class MainWindow
                 return;
             }
 
-            ProgressUpdate(ProgressBar, ProgressStatus, "Loading...", true);
+            ProgressUpdate(CopyProgressBar, ProgressStatus, "Loading...", true);
             var work = $"{projectName}_WORK-DATA.hc";
             var raw = $"{projectName}_RAW-DATA.hc";
             string workVolumePath = Path.Combine(_localProjectFolderPath, projectName, work);
@@ -811,7 +819,7 @@ public partial class MainWindow
                 await workLoadProcess.WaitForExitAsync();
                 if (Path.Exists(_workMapping) == false)
                 {
-                    ProgressUpdate(ProgressBar, ProgressStatus, "Error while loading the WORK DATA container", false);
+                    ProgressUpdate(CopyProgressBar, ProgressStatus, "Error while loading the WORK DATA container", false);
                     MessageBox.Show("Error while loading the WORK DATA container", "ERROR", MessageBoxButton.OK,
                         MessageBoxImage.Error);
                     LoggingEvent("Error", Login!, "Error while loading the WORK DATA container");
@@ -827,7 +835,6 @@ public partial class MainWindow
                 _rawMapping = $"{letters.First().ToString()}:\\";
                 ProcessStartInfo rawLoadInfo = new()
                 {
-
                     FileName = VeraCryptPath,
                     Arguments = $"/q /s /v {rawVolumePath} /l {_rawLowerLetter} /p {password} /m rm"
                 };
@@ -835,7 +842,7 @@ public partial class MainWindow
                 await rawLoadProcess.WaitForExitAsync();
                 if (Path.Exists(_rawMapping) == false)
                 {
-                    ProgressUpdate(ProgressBar, ProgressStatus, "Error while loading the RAW DATA container", false);
+                    ProgressUpdate(CopyProgressBar, ProgressStatus, "Error while loading the RAW DATA container", false);
                     MessageBox.Show("Error while loading the RAW DATA container", "ERROR", MessageBoxButton.OK,
                         MessageBoxImage.Error);
                     LoggingEvent("Error", Login!, "Error while loading the RAW DATA container");
@@ -844,7 +851,7 @@ public partial class MainWindow
                 }
             }
 
-            ProgressUpdate(ProgressBar, ProgressStatus, "Loading complete", false);
+            ProgressUpdate(CopyProgressBar, ProgressStatus, "Loading complete", false);
             MessageBox.Show("The VeraCrypt containers have been Loaded successfully.", "SUCCESS", MessageBoxButton.OK,
                 MessageBoxImage.Information);
             LockUi(false);
@@ -874,12 +881,12 @@ public partial class MainWindow
             LockUi(true);
             PauseButton.IsEnabled = true;
             ProgressStatus.Content = "Copying...";
-            ProgressBar.Value = 0;
-            ProgressBar.Visibility = Visibility.Visible;
-            ProgressBar.IsIndeterminate = false;
+            CopyProgressBar.Value = 0;
+            CopyProgressBar.Visibility = Visibility.Visible;
+            CopyProgressBar.IsIndeterminate = false;
 
             List<Dir> selectedItems = FileListContent.SelectedItems.Cast<Dir>().ToList();
-            _fileCopyHandler = new(RemoteProjectPath!, _workMapping, _rawMapping, ProgressBar, Login!,
+            _fileCopyHandler = new(RemoteProjectPath!, _workMapping, _rawMapping, CopyProgressBar, Login!,
                 _totalSize, this, maxConcurrency: 4, customBufferSize: Buffersize);
             await _fileCopyHandler.CopyFilesMultithreaded(selectedItems);
 
@@ -924,12 +931,28 @@ public partial class MainWindow
             MessageBox.Show("The copy is done and the VeraCrypt containers have been unloaded successfully.", "SUCCESS",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
-            ProgressBar.Visibility = Visibility.Hidden;
+            CopyProgressBar.Visibility = Visibility.Hidden;
             MessageBox.Show(@" /!\ PLEASE SAVE THE PASSWORD IN THE SHARED LASTPASS /!\", "WARNING", MessageBoxButton.OK,
                 MessageBoxImage.Warning);
             ProgressStatus.Content = @" /!\ PLEASE SAVE THE PASSWORD IN THE SHARED LASTPASS /!\";
             LockUi(false);
+            ListCopied.Add(new Dir
+                { Name = ProjectDisplayed.Text, Path = _localProjectFolderPath, Size = _totalSize });
 
+            StackPanel stackPanel = new();
+            stackPanel.Children.Add(new TextBlock { Text = ProjectDisplayed.Text });
+            DockPanel dockPanel = new();
+            double sizeTxt = _totalSize / 1024.0 * 1024.0 * 1024.0;
+
+            dockPanel.Children.Add(new TextBlock
+                { Text = $"Size: {Math.Round(sizeTxt, MidpointRounding.ToZero)}", FontWeight = FontWeights.Bold });
+            dockPanel.Children.Add(new TextBlock { Text = ", ", FontWeight = FontWeights.Thin });
+            dockPanel.Children.Add(new TextBlock
+            {
+                Text = $"Path: {_localProjectFolderPath}", FontWeight = FontWeights.Bold, Foreground = Brushes.Green
+            });
+            stackPanel.Children.Add(dockPanel);
+            UploadListBox.Items.Add(stackPanel);
         }
         catch (Exception ex)
         {
@@ -948,13 +971,14 @@ public partial class MainWindow
             _fileCopyHandler.Resume();
             PauseButton.Content = "Pause";
             ProgressStatus.Content = "Copying...";
-            ProgressBar.Foreground = _windowsGreen;
+            CopyProgressBar.Foreground = _windowsGreen;
             return;
         }
+
         _fileCopyHandler.Pause();
         PauseButton.Content = "Resume";
         ProgressStatus.Content = "Copy paused";
-        ProgressBar.Foreground = _windowsOrange;
+        CopyProgressBar.Foreground = _windowsOrange;
     }
 
     // Used when the user wants to change the size of the work containers
@@ -971,6 +995,45 @@ public partial class MainWindow
         var value = Math.Round(e.NewValue, 2, MidpointRounding.AwayFromZero);
         RawFactor.Text = $"RAW DATA SIZE: {value.ToString(CultureInfo.InvariantCulture)}";
         _rawLowerSizeFactor = e.NewValue;
+    }
+
+    #endregion
+
+    #region Decrypt tab
+
+    private void SelectAllButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        foreach (ListBoxItem item in UploadListBox.Items)
+        {
+            item.IsSelected = true;
+        }
+    }
+
+
+    private void UnselectAllButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        foreach (ListBoxItem item in UploadListBox.Items)
+        {
+            item.IsSelected = false;
+        }
+    }
+
+
+    private void Upload_OnClick(object sender, RoutedEventArgs e)
+    {
+        foreach (ListBoxItem item in UploadListBox.Items)
+        {
+            foreach (Dir directory in ListCopied)
+            {
+                if (item.Content.ToString() == directory.Name)
+                {
+                    if (Path.Exists(Path.Combine(directory.Path, directory.Name, "_PASSWORD.txt")))
+                    {
+                        item.Foreground = Brushes.Red;
+                    }
+                }
+            }
+        }
     }
 
     #endregion
