@@ -14,7 +14,7 @@ public class FileCopyHandler
     private readonly SemaphoreSlim _semaphore; // Semaphore to limit the number of concurrent tasks
     private readonly MainWindow _mainWindow; // Reference to the main window
     private readonly int _bufferSize; // Buffer size for file copy
-    private CancellationTokenSource _cts = new();
+    private readonly CancellationTokenSource _cts = new();
     private bool _isPaused = false;
     private readonly object _pauseLock = new();
 
@@ -215,6 +215,5 @@ public class FileCopyHandler
             _isPaused = false;
             Monitor.PulseAll(_pauseLock); // Resume all threads waiting on _pauseLock
         }
-
     }
 }

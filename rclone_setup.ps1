@@ -21,8 +21,3 @@ if (-Not (Test-Path $rcloneConfig)) {
     Write-Host "Erreur : fichier de configuration rclone.conf introuvable. Ajoutez-le au même dossier que ce script."
     exit 1
 }
-
-# Exécute l'upload avec la config fournie
-Write-Host "Début de l'upload vers Google Drive..."
-Start-Process -NoNewWindow -Wait -FilePath $rcloneExe -ArgumentList "--config=$rcloneConfig copy `"$uploadSource`" `"$uploadDest`" --progress"
-Write-Host "Upload terminé !"
