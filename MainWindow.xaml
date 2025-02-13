@@ -126,7 +126,7 @@
                        Width="Auto" Margin="10,0,10,15" VerticalAlignment="Center" />
                 <ProgressBar Name="CopyProgressBar" Grid.Row="8" Grid.Column="1" HorizontalAlignment="Left" Width="370"
                              Margin="0,10,10,10"
-                             Visibility="Visible" Value="0" Maximum="1000" IsIndeterminate="False" Foreground="#33CC33" />
+                             Visibility="Hidden" Value="0" Maximum="1000" IsIndeterminate="False" Foreground="#33CC33" />
                 <Button Name="PauseButton" Click="PauseButton_OnClick" Content="Pause" Grid.Row="8" Grid.Column="1"
                         Width="80" HorizontalAlignment="Right" Height="Auto"
                         VerticalAlignment="Center" IsEnabled="False" Margin="10,10,10,10"
@@ -155,7 +155,7 @@
                 </StackPanel>
             </Grid>
         </TabItem>
-        <TabItem Header="Upload" Name="UploadTab" MouseDoubleClick="UploadTab_OnMouseDoubleClick" Width="Auto" IsSelected="true">
+        <TabItem Header="Upload" Name="UploadTab" Width="Auto" IsSelected="true">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -198,6 +198,8 @@
                     <Button Name="UnselectAllButton" Click="UnselectAllButton_OnClick" Content="Unselect All"
                             Width="Auto" Height="Auto" VerticalAlignment="Center" Margin="5,30,5,0" />
                     <Button Name="Upload" Click="Upload_OnClick" Content="Upload Selected"
+                            Width="Auto" Height="Auto" VerticalAlignment="Bottom" Margin="5,30,5,0" />
+                    <Button Name="Test" Click="Test_OnClick" Content="Test"
                             Width="Auto" Height="Auto" VerticalAlignment="Bottom" Margin="5,30,5,0" />
                 </StackPanel>
                 <!-- Progress bar -->

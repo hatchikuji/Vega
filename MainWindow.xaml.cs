@@ -2,12 +2,15 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
+using System.Net.Http;
 using System.Net.NetworkInformation;
+using System.Security.Cryptography;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Media;
+using Microsoft.VisualBasic.CompilerServices;
 using Brushes = System.Windows.Media.Brushes;
 using Button = System.Windows.Controls.Button;
 using Color = System.Windows.Media.Color;
@@ -87,8 +90,6 @@ public partial class MainWindow
     private static readonly string
         Loggingfolderpath = Directory.GetCurrentDirectory(); // Path to the logging folder
 
-    private static readonly List<Dir> ListCopied = new List<Dir>();
-
     private string? _computerName = "";
 
     public string? RemoteProjectPath = "";
@@ -154,6 +155,10 @@ public partial class MainWindow
         }
     }
 
+    #region Security
+
+    private static readonly string EncryptionKey = "";
+
     // Custom logging function
     public void LoggingEvent(object log, string login, string result = "")
     {
@@ -215,8 +220,8 @@ public partial class MainWindow
             else
             {
                 string passwordNum = "0123456789";
-                string passwordUpper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
                 string passwordSpecial = "!@#$%^&*()-_=+<,>.";
+                string passwordUpper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
                 string passwordLower = "abcdefghijklmnopqrstuvwxyz";
 
                 if (Path.Exists(projectFolderPath) == false)
@@ -240,7 +245,7 @@ public partial class MainWindow
 
                 for (int i = 0; i < specialNumber; i++)
                 {
-                    passwordBuilder.Append(passwordUpper[random.Next(passwordUpper.Length)]);
+                    passwordBuilder.Append(passwordSpecial[random.Next(passwordSpecial.Length)]);
                 }
 
                 for (int i = 0; i < upperNumber; i++)
@@ -250,7 +255,7 @@ public partial class MainWindow
 
                 for (int i = 0; i < lowerNumber; i++)
                 {
-                    passwordBuilder.Append(passwordSpecial[random.Next(passwordSpecial.Length)]);
+                    passwordBuilder.Append(passwordUpper[random.Next(passwordUpper.Length)]);
                 }
 
                 for (int i = passwordBuilder.Length; i < PasswordLength; i++)
@@ -276,6 +281,64 @@ public partial class MainWindow
             return ex;
         }
     }
+
+    public static void SaveEncryptedToken(string token)
+    {
+        string configPath = Directory.GetDirectories(Path.Combine(Directory.GetCurrentDirectory(), "RClone"), "*", SearchOption.AllDirectories)[0];
+        configPath = Path.Combine(configPath, "rclone_secure.dat");
+
+        byte[] encryptedData = EncryptStringToBytes_Aes(token, EncryptionKey);
+        File.WriteAllBytes(configPath, encryptedData);
+    }
+
+    public static string LoadDecryptedToken()
+    {
+        string configPath = @"C:\rclone\rclone_secure.dat";
+
+        if (!File.Exists(configPath))
+        {
+            throw new Exception("No token found!");
+        }
+
+        byte[] encryptedData = File.ReadAllBytes(configPath);
+        return DecryptStringFromBytes_Aes(encryptedData, EncryptionKey);
+    }
+
+    private static byte[] EncryptStringToBytes_Aes(string plainText, string key)
+    {
+        using Aes aesAlg = Aes.Create();
+        byte[] keyBytes = Encoding.UTF8.GetBytes(key);
+        Array.Resize(ref keyBytes, 32);
+        aesAlg.Key = keyBytes;
+        aesAlg.GenerateIV();
+
+        using MemoryStream msEncrypt = new();
+        msEncrypt.Write(aesAlg.IV, 0, aesAlg.IV.Length);
+        using CryptoStream csEncrypt = new(msEncrypt, aesAlg.CreateEncryptor(), CryptoStreamMode.Write);
+        using StreamWriter swEncrypt = new(csEncrypt);
+        swEncrypt.Write(plainText);
+        return msEncrypt.ToArray();
+    }
+
+    private static string DecryptStringFromBytes_Aes(byte[] cipherText, string key)
+    {
+        using Aes aesAlg = Aes.Create();
+        byte[] keyBytes = Encoding.UTF8.GetBytes(key);
+        Array.Resize(ref keyBytes, 32);
+        aesAlg.Key = keyBytes;
+
+        using MemoryStream msDecrypt = new(cipherText);
+        byte[] iv = new byte[16];
+        msDecrypt.Read(iv, 0, iv.Length);
+        aesAlg.IV = iv;
+
+        using CryptoStream csDecrypt = new(msDecrypt, aesAlg.CreateDecryptor(), CryptoStreamMode.Read);
+        using StreamReader srDecrypt = new(csDecrypt);
+        return srDecrypt.ReadToEnd();
+    }
+
+    #endregion
+
 
     // Find all the children of a specific type
     private static IEnumerable<T> FindVisualChildren<T>(DependencyObject depObj) where T : DependencyObject
@@ -356,14 +419,14 @@ public partial class MainWindow
     {
         if (state)
         {
-            foreach (TextBox textBox in FindVisualChildren<TextBox>(this.CopyTab))
-            {
-                textBox.IsEnabled = false;
-            }
-
-            foreach (Button button in FindVisualChildren<Button>(this.CopyTab))
+            foreach (Button button in FindVisualChildren<Button>(this))
             {
                 button.IsEnabled = false;
+            }
+
+            foreach (TextBox textBox in FindVisualChildren<TextBox>(this))
+            {
+                textBox.IsEnabled = false;
             }
 
             PasswordBox.IsEnabled = false;
@@ -374,14 +437,9 @@ public partial class MainWindow
         }
         else
         {
-            foreach (TextBox textBox in FindVisualChildren<TextBox>(this))
+            foreach (UIElement element in FindVisualChildren<UIElement>(this))
             {
-                textBox.IsEnabled = true;
-            }
-
-            foreach (Button button in FindVisualChildren<Button>(this))
-            {
-                button.IsEnabled = true;
+                element.IsEnabled = true;
             }
 
             PasswordBox.IsEnabled = true;
@@ -820,7 +878,8 @@ public partial class MainWindow
                 await workLoadProcess.WaitForExitAsync();
                 if (Path.Exists(_workMapping) == false)
                 {
-                    ProgressUpdate(CopyProgressBar, ProgressStatus, "Error while loading the WORK DATA container", false);
+                    ProgressUpdate(CopyProgressBar, ProgressStatus, "Error while loading the WORK DATA container",
+                        false);
                     MessageBox.Show("Error while loading the WORK DATA container", "ERROR", MessageBoxButton.OK,
                         MessageBoxImage.Error);
                     LoggingEvent("Error", Login!, "Error while loading the WORK DATA container");
@@ -843,7 +902,8 @@ public partial class MainWindow
                 await rawLoadProcess.WaitForExitAsync();
                 if (Path.Exists(_rawMapping) == false)
                 {
-                    ProgressUpdate(CopyProgressBar, ProgressStatus, "Error while loading the RAW DATA container", false);
+                    ProgressUpdate(CopyProgressBar, ProgressStatus, "Error while loading the RAW DATA container",
+                        false);
                     MessageBox.Show("Error while loading the RAW DATA container", "ERROR", MessageBoxButton.OK,
                         MessageBoxImage.Error);
                     LoggingEvent("Error", Login!, "Error while loading the RAW DATA container");
@@ -880,11 +940,13 @@ public partial class MainWindow
             }
 
             LockUi(true);
-            PauseButton.IsEnabled = true;
+
             ProgressStatus.Content = "Copying...";
             CopyProgressBar.Value = 0;
             CopyProgressBar.Visibility = Visibility.Visible;
             CopyProgressBar.IsIndeterminate = false;
+
+            PauseButton.IsEnabled = true;
 
             List<Dir> selectedItems = FileListContent.SelectedItems.Cast<Dir>().ToList();
             _fileCopyHandler = new(RemoteProjectPath!, _workMapping, _rawMapping, CopyProgressBar, Login!,
@@ -937,23 +999,51 @@ public partial class MainWindow
                 MessageBoxImage.Warning);
             ProgressStatus.Content = @" /!\ PLEASE SAVE THE PASSWORD IN THE SHARED LASTPASS /!\";
             LockUi(false);
-            ListCopied.Add(new Dir
-                { Name = ProjectDisplayed.Text, Path = _localProjectFolderPath, Size = _totalSize });
 
             StackPanel stackPanel = new();
-            stackPanel.Children.Add(new TextBlock { Text = ProjectDisplayed.Text });
+            stackPanel.Children.Add(new TextBlock { Name = "Project", Text = ProjectDisplayed.Text });
             DockPanel dockPanel = new();
-            double sizeTxt = _totalSize / 1024.0 * 1024.0 * 1024.0;
+            double sizeTxt = Directory.GetFiles(Path.Combine(_localProjectFolderPath, ProjectDisplayed.Text), "*",
+                    SearchOption.AllDirectories)
+                .Sum(t => (new FileInfo(t).Length));
+            double realSize = sizeTxt;
+            string unit = "";
+            if (sizeTxt < 1024.0)
+            {
+                unit = "B";
+            }
+            else if (sizeTxt < 1048576.0)
+            {
+                sizeTxt /= 1024.0;
+                unit = "KB";
+            }
+            else if (sizeTxt < 1073741824.0)
+            {
+                sizeTxt /= 1048576.0;
+                unit = "MB";
+            }
+            else if (sizeTxt < 1099511627776.0)
+            {
+                sizeTxt /= 1073741824.0;
+                unit = "GB";
+            }
 
-            dockPanel.Children.Add(new TextBlock
-                { Text = $"Size: {Math.Round(sizeTxt,3, MidpointRounding.ToZero)}GB", FontWeight = FontWeights.Bold });
-            dockPanel.Children.Add(new TextBlock { Text = ", ", FontWeight = FontWeights.Thin });
+            // First child
             dockPanel.Children.Add(new TextBlock
             {
-                Text = $"Path: {_localProjectFolderPath}", FontWeight = FontWeights.Bold, Foreground = Brushes.Green
+                Name = "Size", Tag = realSize, Text = $"Size: {Math.Round(sizeTxt, 3, MidpointRounding.ToZero)}{unit}",
+                FontWeight = FontWeights.Bold
+            });
+            // Second child
+            dockPanel.Children.Add(new TextBlock { Text = "; Path: ", FontWeight = FontWeights.Thin });
+            // Third child
+            dockPanel.Children.Add(new TextBlock
+            {
+                Name = "Path", Text = _localProjectFolderPath, FontWeight = FontWeights.Bold, Foreground = Brushes.Green
             });
             stackPanel.Children.Add(dockPanel);
-            UploadListBox.Items.Add(stackPanel);
+            ListBoxItem listBoxItem = new() { Content = stackPanel };
+            UploadListBox.Items.Add(listBoxItem);
         }
         catch (Exception ex)
         {
@@ -1004,90 +1094,174 @@ public partial class MainWindow
 
     private void SelectAllButton_OnClick(object sender, RoutedEventArgs e)
     {
-        foreach (ListBoxItem item in UploadListBox.Items)
+        foreach (ListBoxItem listBoxItem in UploadListBox.Items)
         {
-            item.IsSelected = true;
+            listBoxItem.IsSelected = true;
         }
     }
-
 
     private void UnselectAllButton_OnClick(object sender, RoutedEventArgs e)
     {
-        foreach (ListBoxItem item in UploadListBox.Items)
+        foreach (ListBoxItem listBoxItem in UploadListBox.Items)
         {
-            item.IsSelected = false;
+            listBoxItem.IsSelected = false;
         }
     }
-    
-    private void Upload_OnClick(object sender, RoutedEventArgs e)
+
+    private async void Upload_OnClick(object sender, RoutedEventArgs e)
     {
-        foreach (ListBoxItem item in UploadListBox.Items)
+        try
         {
-            foreach (Dir directory in ListCopied)
+            // Check if Rclone is installed in Vega/RClone
+            string rclonePath = Path.Combine(Directory.GetCurrentDirectory(), "RClone");
+            if (Path.Exists(rclonePath) == false)
             {
-                if (item.Content.ToString() == directory.Name)
+                Directory.CreateDirectory(rclonePath);
+                if (Directory.EnumerateFiles(rclonePath, "rclone.exe").Any() == false)
                 {
-                    if (Path.Exists(Path.Combine(directory.Path, directory.Name, "_PASSWORD.txt")))
+                    try
                     {
-                        item.Foreground = Brushes.Red;
+                        MessageBoxResult result = MessageBox.Show("Rclone not detected do you want to install it ?",
+                            "Notice",
+                            MessageBoxButton.YesNo, MessageBoxImage.Information);
+                        if (result == MessageBoxResult.No)
+                        {
+                            return;
+                        }
+
+                        LockUi(true);
+                        Uri uri = new Uri("https://downloads.rclone.org/rclone-current-windows-amd64.zip");
+                        HttpClient client = new();
+
+                        using (HttpResponseMessage response =
+                               await client.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead))
+                        {
+                            response.EnsureSuccessStatusCode();
+                            await using (Stream s = await response.Content.ReadAsStreamAsync())
+                            {
+                                string zipPath = Path.Combine(
+                                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads",
+                                    "rclone.zip");
+                                if (Path.Exists(zipPath))
+                                {
+                                    File.Delete(zipPath);
+                                }
+
+                                await using (FileStream fs = new FileStream(zipPath, FileMode.CreateNew))
+                                {
+                                    await s.CopyToAsync(fs);
+                                }
+                            }
+                        }
+
+                        ProcessStartInfo psi = new ProcessStartInfo
+                        {
+                            FileName = "rclone",
+                            Arguments = "config create gdrive drive config_is_local=false team_drive=true",
+                            RedirectStandardOutput = true,
+                            RedirectStandardError = true,
+                            UseShellExecute = false,
+                            CreateNoWindow = false
+                        };
+
+
+
+                        ZipFile.ExtractToDirectory(Path.Combine(
+                            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads",
+                            "rclone.zip"), rclonePath);
+                        File.Delete(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                            "Downloads",
+                            "rclone.zip"));
+                        MessageBox.Show($"Rclone installed successfully at and configured successfully'{rclonePath}' ", "SUCCESS",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Information);
+                        LockUi(false);
+                    }
+
+                    catch (Exception exception)
+                    {
+                        Console.WriteLine(exception);
+                        LockUi(false);
+                        throw;
                     }
                 }
             }
-            // Upload
+
+            // Check if the token is present
+            if (Path.Exists(Path.Combine(rclonePath, "rclone_secure.dat")) == false)
+            {
+                MessageBox.Show("No token detected, please delete the RClone folder", "ERROR", MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                return;
+            }
+            // Mount the remote drive
+            string token = LoadDecryptedToken();
+            string remoteDrive = "gdrive:";
+
+
+
+            // Retreive the selected projects to upload
+            foreach (ListBoxItem listBoxItem in UploadListBox.SelectedItems)
+            {
+                string name = "";
+                string path = "";
+                double size;
+                StackPanel stackPanel = (StackPanel)listBoxItem.Content;
+                if (stackPanel.Children[0] is TextBlock projectName)
+                {
+                    name = projectName.Text;
+                }
+
+                if (stackPanel.Children[1] is DockPanel dockPanel)
+                {
+                    if (dockPanel.Children[0] is TextBlock projectSize)
+                    {
+                        size = (double)projectSize.Tag;
+                    }
+
+                    if (dockPanel.Children[2] is TextBlock projectPath)
+                    {
+                        path = projectPath.Text;
+                    }
+                }
+
+                listBoxItem.Background = Path.Exists(Path.Combine(path, name, $"{name}_PASSWORD.txt"))
+                    ? Brushes.OrangeRed
+                    : Brushes.Transparent;
+            }
+
+            bool passDeleted = true;
+            foreach (ListBoxItem listBoxItem in UploadListBox.SelectedItems)
+            {
+                if (listBoxItem.Background == Brushes.OrangeRed)
+                {
+                    passDeleted = false;
+                }
+            }
+
+            if (!passDeleted)
+            {
+                MessageBox.Show("Please delete the password file in the highlighted projects or unselect them", "WARNING",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+
+
         }
-    }
-
-    
-    
-    #endregion
-
-    private void UploadTab_OnMouseDoubleClick(object sender, MouseButtonEventArgs e)
-    {
-        if (!Path.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "RClone",
-                "rclone.exe")))
+        catch (Exception ex)
         {
-            try
-            {
-                MessageBoxResult result = MessageBox.Show("Rclone not detected do you want to install it ?", "Notice", MessageBoxButton.YesNo, MessageBoxImage.Information);
-                if (result == MessageBoxResult.No)
-                {
-                    return;
-                }
-                
-                string[] argsList =
-                [
-                    "",
-                    ""
-                ];
-                
-                string args = string.Join(" ", argsList);
-                ProcessStartInfo rcloneInstall = new()
-                {
-                    Verb = "runas",
-                    LoadUserProfile = true,
-                    FileName = "powershell.exe",
-                    Arguments = args,
-                    UseShellExecute = true,
-                    CreateNoWindow = false,
-                    WindowStyle = ProcessWindowStyle.Normal
-                };
-                Process rcloneProcess = Process.Start(rcloneInstall) ?? throw new InvalidOperationException();
-                rcloneProcess.WaitForExit();
-                rcloneProcess.Close();
-                if (rcloneProcess.ExitCode != 0)
-                {
-                    MessageBox.Show(rcloneProcess.StandardError.ReadToEnd(), "ERROR", MessageBoxButton.OK, MessageBoxImage.Error);
-                    LoggingEvent("rclone_install", Login!, "Could not install rclone.");
-                    return;
-                }
-                UploadTab.IsSelected = true;
-                
-            }
-            catch (Exception exception)
-            {
-                Console.WriteLine(exception);
-                throw;
-            }
+            MessageBox.Show("");
         }
     }
+
+    private void Test_OnClick(object sender, RoutedEventArgs e)
+    {
+
+
+
+    }
+
+
+    #endregion
 }

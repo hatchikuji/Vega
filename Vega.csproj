@@ -19,9 +19,6 @@
 
     <ItemGroup>
       <None Remove="rclone_setup.ps1" />
-      <AdditionalFiles Include="rclone_setup.ps1">
-        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      </AdditionalFiles>
     </ItemGroup>
 
 </Project>

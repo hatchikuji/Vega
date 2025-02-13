@@ -106,7 +106,7 @@ public class FileCopyHandler
         }
         catch (Exception ex)
         {
-            _mainWindow.LockUi(true);
+            _mainWindow.LockUi(false);
             MessageBox.Show($"Error occurred during copying {sourcePath}: {ex.Message}", "ERROR",  MessageBoxButtons.OK, MessageBoxIcon.Error);
             _mainWindow.LoggingEvent(ex.Message, _login, ex.StackTrace ?? string.Empty);
             throw;
