@@ -2,10 +2,10 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Net.NetworkInformation;
 using System.Text;
 using System.Windows;
 using System.Windows.Media;
+using Application = System.Windows.Application;
 using Button = System.Windows.Controls.Button;
 using Color = System.Windows.Media.Color;
 using Directory = System.IO.Directory;
@@ -24,15 +24,6 @@ namespace Vega;
 /// </summary>
 public partial class MainWindow
 {
-    public MainWindow()
-    {
-        InitializeComponent();
-        this.Initialized += VeryfyVeracrypt;
-        this.Closed += Window_Closed;
-        // Set the color of the progress bar because the default color is ugly
-    }
-
-
     #region Variables
 
     // Variables to modifie the differents data
@@ -65,7 +56,7 @@ public partial class MainWindow
     private string _rawLowerLetter = "";
 
     // Color for the progress bar
-    private readonly SolidColorBrush _windowsOrange = new(Color.FromArgb(255,244,180,0));
+    private readonly SolidColorBrush _windowsOrange = new(Color.FromArgb(255, 244, 180, 0));
     private readonly SolidColorBrush _windowsGreen = new(Color.FromArgb(255, 51, 204, 51));
 
 
@@ -84,20 +75,39 @@ public partial class MainWindow
     private static readonly string
         Loggingfolderpath = Directory.GetCurrentDirectory(); // Path to the logging folder
 
-    private string? _computerName = "";
+    private string? _computerName = ""; // Name of the remote computer
 
-    public string? RemoteProjectPath = "";
+    public string? RemoteProjectPath = ""; // Path to the remote project folder
 
-    public string? Login = "";
+    public string? Login = ""; // User login
 
-    private string? _password = "";
+    private string? _password = ""; // User password
 
-    private NetworkShareAccesser _connection;
+    private bool _connected = false; // Connection state
 
-    private FileCopyHandler _fileCopyHandler;
+    private NetworkShareAccesser _connection; // Connection to the remote computer
+
+    private FileCopyHandler _fileCopyHandler; // File copy handler
+
+
 
     #endregion
 
+    public MainWindow()
+    {
+        InitializeComponent();
+        this.Initialized += VeryfyVeracrypt;
+        this.Closed += Window_Closed;
+
+        string processName = Process.GetCurrentProcess().ProcessName;
+        Process[] processes = Process.GetProcessesByName(processName);
+
+        if (processes.Length > 1)
+        {
+            MessageBox.Show("Another instance of the application is already running.", "Instance Running", MessageBoxButton.OK, MessageBoxImage.Information);
+            Application.Current.Shutdown();
+        }
+    }
     // Used to identify NetworkShareAccesser errors and Win32 errors
     private static string GetSystemMessage(uint errorCode)
     {
@@ -143,9 +153,10 @@ public partial class MainWindow
             rawUnloadProcess.WaitForExit();
         }
 
-        if (DisconnectButton.IsEnabled)
+        if (_connected == true)
         {
             _connection.Dispose();
+            _connected = false;
         }
     }
 
@@ -349,8 +360,6 @@ public partial class MainWindow
     // Lock the UI during a process
     public void LockUi(bool state)
     {
-        var connectButtonState = ConnectButton.IsEnabled;
-        var disconnectButtonState = DisconnectButton.IsEnabled;
         if (state)
         {
             foreach (TextBox textBox in FindVisualChildren<TextBox>(this))
@@ -362,12 +371,12 @@ public partial class MainWindow
             {
                 button.IsEnabled = false;
             }
+
             PasswordBox.IsEnabled = false;
             FileListContent.IsEnabled = false;
             DriveList.IsEnabled = false;
             WorkSlider.IsEnabled = false;
             RawSlider.IsEnabled = false;
-
         }
         else
         {
@@ -380,15 +389,19 @@ public partial class MainWindow
             {
                 button.IsEnabled = true;
             }
-            ConnectButton.IsEnabled =  connectButtonState;
-            DisconnectButton.IsEnabled = disconnectButtonState;
 
+            if (_connected)
+            {
+                DisconnectButton.IsEnabled = true;
+                ConnectButton.IsEnabled = false;
+            }
             PasswordBox.IsEnabled = true;
             FileListContent.IsEnabled = true;
             DriveList.IsEnabled = true;
             WorkSlider.IsEnabled = true;
             RawSlider.IsEnabled = true;
         }
+
         PauseButton.IsEnabled = false;
     }
 
@@ -413,15 +426,6 @@ public partial class MainWindow
 
             if (_computerName != "" && Login != "" && _password != "")
             {
-                var ping = new Ping();
-                PingReply reply = ping.Send(_computerName);
-                if (reply.Status != IPStatus.Success)
-                {
-                    MessageBox.Show("Cannot join " + _computerName, "ERROR", MessageBoxButton.OK,
-                        MessageBoxImage.Error);
-                    throw new($"Cannot join {_computerName} - {reply.Status}");
-                }
-
                 try
                 {
                     _connection = NetworkShareAccesser.Access(remoteComputerName: _computerName, userName: Login,
@@ -430,10 +434,35 @@ public partial class MainWindow
 
                 catch (Win32Exception ex)
                 {
-                    string exMsg = GetSystemMessage((uint)ex.NativeErrorCode);
-                    LoggingEvent("Connexion", Login, $"CAN BE IGNORED: {exMsg}");
+                    string exMsg;
+                    // Switch case to handle the different Win32 errors
+                    switch (ex.NativeErrorCode)
+                    {
+                        // ERROR CODE 5: Access denied
+                        case 5:
+                            MessageBox.Show("Access denied", "ERROR", MessageBoxButton.OK, MessageBoxImage.Error);
+                            LoggingEvent("Connexion", Login, "Access denied");
+                            return;
+                        // ERROR CODE 53: The Host path was not found
+                        case 53:
+                            MessageBox.Show("The Host path was not found", "ERROR", MessageBoxButton.OK,
+                                MessageBoxImage.Error);
+                            LoggingEvent("Connexion", Login, "The Host path was not found");
+                            return;
+                        // ERROR CODE 1219: Multiple connections to a server or shared resource by the same user
+                        case 1219:
+                            exMsg = GetSystemMessage((uint)ex.NativeErrorCode);
+                            LoggingEvent("Connexion", Login, $"WARNING: ERROR CODE: {ex.NativeErrorCode}, ERROR MESSAGE: {exMsg}");
+                            break;
+                        // Other errors
+                        default:
+                            exMsg = GetSystemMessage((uint)ex.NativeErrorCode);
+                            MessageBox.Show(exMsg, "ERROR", MessageBoxButton.OK, MessageBoxImage.Error);
+                            LoggingEvent("Connexion", Login, $"ERROR CODE: {ex.NativeErrorCode}, ERROR MESSAGE: {exMsg}");
+                            return;
+                    }
                 }
-
+                // Command to get the list of the shared drives
                 ProcessStartInfo processInfo = new()
                 {
                     FileName = "cmd.exe",
@@ -456,32 +485,33 @@ public partial class MainWindow
                     throw new(error);
                 }
 
-                // Traitement des noms de partage
+                // Selecting the lines that contain the shares
                 foreach (string line in output.Split('\n'))
                 {
-                    // Suppression des espaces inutiles
+                    // Suppression of unnecessary blank spaces
                     string trimmedLine = line.Trim();
 
-                    // Vérification que la ligne contient un partage valide
+                    // Verify if the line is not empty and not a header
                     if (!string.IsNullOrEmpty(trimmedLine) &&
                         !trimmedLine.StartsWith("Ressources partagées") &&
                         !trimmedLine.StartsWith("Nom du partage") &&
                         !trimmedLine.StartsWith("La commande") &&
                         !trimmedLine.StartsWith("-"))
                     {
-                        // Séparation des mots dans la ligne
+                        // Split the line into parts
                         string[] parts = trimmedLine.Split([' '], StringSplitOptions.RemoveEmptyEntries);
 
-                        // Vérification si le dernier mot est "Disque"
+                        // Verify of the last part is a drive
                         if (parts.Length > 1 && (parts[^1].Equals("Disque", StringComparison.OrdinalIgnoreCase) ||
                                                  parts[^1].Equals("(UNC)", StringComparison.OrdinalIgnoreCase)))
                         {
-                            // Afficher le premier mot comme nom du partage
+                            // Show the drive in the list
                             DriveList.Items.Add(parts[0]);
                         }
                     }
                 }
-
+                // Connection successful
+                _connected = true;
                 ComputerName.IsEnabled = false;
                 LoginBox.Text = "";
                 PasswordBox.Password = "";
@@ -516,8 +546,7 @@ public partial class MainWindow
                 MessageBoxImage.Error);
             LoggingEvent(exMsg, Login!, ex.StackTrace!);
         }
-
-        MessageBox.Show("Disconnected", "SUCCESS", MessageBoxButton.OK, MessageBoxImage.Information);
+        _connected = false;
         DisconnectButton.IsEnabled = false;
         ConnectButton.IsEnabled = true;
         DriveList.Items.Clear();
@@ -527,9 +556,11 @@ public partial class MainWindow
         ProjectDisplayed.ToolTip = "";
         PasswordBox.Password = "";
         ComputerName.Text = "";
+        _computerName = null;
         RawSlider.Value = 1.09;
         WorkSlider.Value = 1.09;
         ComputerName.IsEnabled = true;
+        MessageBox.Show("Disconnected", "SUCCESS", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     // Used when the user wants to search for a project
@@ -538,14 +569,21 @@ public partial class MainWindow
         try
         {
             _totalSize = 0;
-            string computer = _computerName!;
-            var selectedDrive = DriveList.SelectedItem.ToString();
 
-            if (string.IsNullOrEmpty(selectedDrive))
+            if (_computerName == null)
+            {
+                MessageBox.Show("Please connect", "WARNING", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            string computer = _computerName!;
+            if (DriveList.SelectedItem == null)
             {
                 MessageBox.Show("No Drive selected", "WARNING", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
+            var selectedDrive = DriveList.SelectedItem.ToString();
+
 
             ProjectDisplayed.Text = "";
             FileListContent.Items.Clear();
@@ -553,16 +591,14 @@ public partial class MainWindow
             var dialog = new FolderBrowserDialog();
             dialog.InitialDirectory = @$"\\{computer}\{selectedDrive}\";
             dialog.ShowDialog();
-            try
+            if (String.IsNullOrEmpty(dialog.SelectedPath))
             {
-                RemoteProjectPath = dialog.SelectedPath;
-                ProjectBox.Text = Path.GetFileName(RemoteProjectPath!);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(ex.Message, "ERROR", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show("Please select a project", "WARNING", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
+
+            RemoteProjectPath = dialog.SelectedPath;
+            ProjectBox.Text = Path.GetFileName(RemoteProjectPath);
 
             ProjectDisplayed.ToolTip = $"The full path is:\n{RemoteProjectPath}";
 
@@ -593,17 +629,24 @@ public partial class MainWindow
             // Check if the path contains spaces
             if (dialog.SelectedPath.Contains(' '))
             {
-                MessageBox.Show($"The path contains spaces, please choose another one:\n{dialog.SelectedPath}", "WARNING", MessageBoxButton.OK,
+                MessageBox.Show($"The path contains spaces, please choose another one:\n{dialog.SelectedPath}",
+                    "WARNING", MessageBoxButton.OK,
                     MessageBoxImage.Warning);
                 return;
+            }
+
+
+            if (String.IsNullOrEmpty(dialog.SelectedPath))
+            {
+                _localProjectFolderPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                SavingField.Text = _localProjectFolderPath;
             }
 
             SavingField.Text = dialog.SelectedPath;
             _localProjectFolderPath = dialog.SelectedPath;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            MessageBox.Show(ex.Message, "ERROR", MessageBoxButton.OK, MessageBoxImage.Error);
             _localProjectFolderPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             SavingField.Text = _localProjectFolderPath;
         }
@@ -699,8 +742,8 @@ public partial class MainWindow
                     }
                     catch (Exception ex)
                     {
-                        ProgressUpdate(ProgressBar, ProgressStatus, "Error while encrypting the WORK DATA", false);
-                        MessageBox.Show($"Error while encrypting the WORK DATA: {ex.Message}", "ERROR",
+                        ProgressUpdate(ProgressBar, ProgressStatus, $"Error while encrypting {workDataName}", false);
+                        MessageBox.Show($"Error while encrypting {workDataName}; {ex.Message}", "ERROR",
                             MessageBoxButton.OK,
                             MessageBoxImage.Error);
                         LoggingEvent(ex.Message, Login!, ex.StackTrace!);
@@ -708,7 +751,6 @@ public partial class MainWindow
                         return;
                     }
                 }
-
             }
 
             if (rawFolderItems.Count > 0)
@@ -754,8 +796,8 @@ public partial class MainWindow
                     }
                     catch (Exception ex)
                     {
-                        ProgressUpdate(ProgressBar, ProgressStatus, "Error while encrypting the RAW DATA", false);
-                        MessageBox.Show($"Error while encrypting the RAW DATA: {ex.Message}", "ERROR",
+                        ProgressUpdate(ProgressBar, ProgressStatus, $"Error while encrypting {rawDataName}", false);
+                        MessageBox.Show($"Error while encrypting {rawDataName}; {ex.Message}", "ERROR",
                             MessageBoxButton.OK,
                             MessageBoxImage.Error);
                         LoggingEvent(ex.Message, Login!, ex.StackTrace!);
@@ -785,6 +827,7 @@ public partial class MainWindow
                     letters = letters.Replace(d.Name[0].ToString(), "");
                 }
             }
+
             if (letters.Length < 2)
             {
                 MessageBox.Show("No free drive letter available", "ERROR", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -815,8 +858,8 @@ public partial class MainWindow
                 await workLoadProcess.WaitForExitAsync();
                 if (Path.Exists(_workMapping) == false)
                 {
-                    ProgressUpdate(ProgressBar, ProgressStatus, "Error while loading the WORK DATA container", false);
-                    MessageBox.Show("Error while loading the WORK DATA container", "ERROR", MessageBoxButton.OK,
+                    ProgressUpdate(ProgressBar, ProgressStatus, $"Error while loading the {work} container", false);
+                    MessageBox.Show($"Error while loading the {work} container", "ERROR", MessageBoxButton.OK,
                         MessageBoxImage.Error);
                     LoggingEvent("Error", Login!, "Error while loading the WORK DATA container");
                     LockUi(false);
@@ -831,7 +874,6 @@ public partial class MainWindow
                 _rawMapping = $"{letters.First().ToString()}:\\";
                 ProcessStartInfo rawLoadInfo = new()
                 {
-
                     FileName = VeraCryptPath,
                     Arguments = $"/q /s /v {rawVolumePath} /l {_rawLowerLetter} /p {password} /m rm"
                 };
@@ -839,8 +881,8 @@ public partial class MainWindow
                 await rawLoadProcess.WaitForExitAsync();
                 if (Path.Exists(_rawMapping) == false)
                 {
-                    ProgressUpdate(ProgressBar, ProgressStatus, "Error while loading the RAW DATA container", false);
-                    MessageBox.Show("Error while loading the RAW DATA container", "ERROR", MessageBoxButton.OK,
+                    ProgressUpdate(ProgressBar, ProgressStatus, $"Error while loading the {raw} container", false);
+                    MessageBox.Show($"Error while loading the {raw} container", "ERROR", MessageBoxButton.OK,
                         MessageBoxImage.Error);
                     LoggingEvent("Error", Login!, "Error while loading the RAW DATA container");
                     LockUi(false);
@@ -933,7 +975,6 @@ public partial class MainWindow
                 MessageBoxImage.Warning);
             ProgressStatus.Content = @" /!\ PLEASE SAVE THE PASSWORD IN THE SHARED LASTPASS /!\";
             LockUi(false);
-
         }
         catch (Exception ex)
         {
@@ -955,6 +996,7 @@ public partial class MainWindow
             ProgressBar.Foreground = _windowsGreen;
             return;
         }
+
         _fileCopyHandler.Pause();
         PauseButton.Content = "Resume";
         ProgressStatus.Content = "Copy paused";

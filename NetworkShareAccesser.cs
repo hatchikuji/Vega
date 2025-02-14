@@ -184,4 +184,9 @@ public class NetworkShareAccesser : IDisposable
     {
         this.DisconnectFromShare(this._remoteUncName);
     }
+
+    public void Dispose(string remoteUnc)
+    {
+        this.DisconnectFromShare(remoteUnc);
+    }
 }
