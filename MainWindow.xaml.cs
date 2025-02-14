@@ -349,6 +349,8 @@ public partial class MainWindow
     // Lock the UI during a process
     public void LockUi(bool state)
     {
+        var connectButtonState = ConnectButton.IsEnabled;
+        var disconnectButtonState = DisconnectButton.IsEnabled;
         if (state)
         {
             foreach (TextBox textBox in FindVisualChildren<TextBox>(this))
@@ -360,12 +362,12 @@ public partial class MainWindow
             {
                 button.IsEnabled = false;
             }
-
             PasswordBox.IsEnabled = false;
             FileListContent.IsEnabled = false;
             DriveList.IsEnabled = false;
             WorkSlider.IsEnabled = false;
             RawSlider.IsEnabled = false;
+
         }
         else
         {
@@ -378,6 +380,8 @@ public partial class MainWindow
             {
                 button.IsEnabled = true;
             }
+            ConnectButton.IsEnabled =  connectButtonState;
+            DisconnectButton.IsEnabled = disconnectButtonState;
 
             PasswordBox.IsEnabled = true;
             FileListContent.IsEnabled = true;
