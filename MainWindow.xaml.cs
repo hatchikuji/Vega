@@ -417,6 +417,9 @@ public partial class MainWindow
     // Lock the UI during a process
     public void LockUi(bool state)
     {
+        // To keep the state of the button before the lock and after
+        var connectionButton = ConnectButton.IsEnabled;
+        var disconnectButton = DisconnectButton.IsEnabled;
         if (state)
         {
             foreach (Button button in FindVisualChildren<Button>(this))
@@ -448,6 +451,9 @@ public partial class MainWindow
             WorkSlider.IsEnabled = true;
             RawSlider.IsEnabled = true;
         }
+
+        ConnectButton.IsEnabled = connectionButton;
+        DisconnectButton.IsEnabled = disconnectButton;
 
         PauseButton.IsEnabled = false;
     }
@@ -1154,16 +1160,17 @@ public partial class MainWindow
                             }
                         }
 
-                        ProcessStartInfo psi = new ProcessStartInfo
+                        ProcessStartInfo rcloneConfigInfo = new ProcessStartInfo
                         {
-                            FileName = "rclone",
-                            Arguments = "config create gdrive drive config_is_local=false team_drive=true",
+                            FileName = Path.Combine(Directory.GetCurrentDirectory(),"RClone", "rclone.exe"),
+                            Arguments = "config create gdrive drive config_is_local=false scope=drive team_drive=\"400 - Data Archive\" -i",
                             RedirectStandardOutput = true,
                             RedirectStandardError = true,
                             UseShellExecute = false,
                             CreateNoWindow = false
                         };
-
+                        Process rcloneConfigProcess = Process.Start(rcloneConfigInfo) ?? throw new InvalidOperationException();
+                        await rcloneConfigProcess.WaitForExitAsync();
 
 
                         ZipFile.ExtractToDirectory(Path.Combine(
