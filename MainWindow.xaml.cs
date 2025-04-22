@@ -89,8 +89,6 @@ public partial class MainWindow
 
     private FileCopyHandler _fileCopyHandler; // File copy handler
 
-
-
     #endregion
 
     public MainWindow()
@@ -104,10 +102,12 @@ public partial class MainWindow
 
         if (processes.Length > 1)
         {
-            MessageBox.Show("Another instance of the application is already running.", "Instance Running", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("Another instance of the application is already running.", "Instance Running",
+                MessageBoxButton.OK, MessageBoxImage.Information);
             Application.Current.Shutdown();
         }
     }
+
     // Used to identify NetworkShareAccesser errors and Win32 errors
     private static string GetSystemMessage(uint errorCode)
     {
@@ -395,6 +395,7 @@ public partial class MainWindow
                 DisconnectButton.IsEnabled = true;
                 ConnectButton.IsEnabled = false;
             }
+
             PasswordBox.IsEnabled = true;
             FileListContent.IsEnabled = true;
             DriveList.IsEnabled = true;
@@ -424,107 +425,104 @@ public partial class MainWindow
                 return;
             }
 
-            if (_computerName != "" && Login != "" && _password != "")
-            {
-                try
-                {
-                    _connection = NetworkShareAccesser.Access(remoteComputerName: _computerName, userName: Login,
-                        password: _password);
-                }
 
-                catch (Win32Exception ex)
+            try
+            {
+                _connection = NetworkShareAccesser.Access(remoteComputerName: _computerName, userName: Login,
+                    password: _password);
+            }
+
+            catch (Win32Exception ex)
+            {
+                string exMsg;
+                // Switch case to handle the different Win32 errors
+                switch (ex.NativeErrorCode)
                 {
-                    string exMsg;
-                    // Switch case to handle the different Win32 errors
-                    switch (ex.NativeErrorCode)
+                    // ERROR CODE 5: Access denied
+                    case 5:
+                        MessageBox.Show("Access denied", "ERROR", MessageBoxButton.OK, MessageBoxImage.Error);
+                        LoggingEvent("Connexion", Login, "Access denied");
+                        return;
+                    // ERROR CODE 53: The Host path was not found
+                    case 53:
+                        MessageBox.Show("The Host path was not found", "ERROR", MessageBoxButton.OK,
+                            MessageBoxImage.Error);
+                        LoggingEvent("Connexion", Login, "The Host path was not found");
+                        return;
+                    // ERROR CODE 1219: Multiple connections to a server or shared resource by the same user
+                    case 1219:
+                        exMsg = GetSystemMessage((uint)ex.NativeErrorCode);
+                        LoggingEvent("Connexion", Login,
+                            $"WARNING: ERROR CODE: {ex.NativeErrorCode}, ERROR MESSAGE: {exMsg}");
+                        break;
+                    // Other errors
+                    default:
+                        exMsg = GetSystemMessage((uint)ex.NativeErrorCode);
+                        MessageBox.Show(exMsg, "ERROR", MessageBoxButton.OK, MessageBoxImage.Error);
+                        LoggingEvent("Connexion", Login, $"ERROR CODE: {ex.NativeErrorCode}, ERROR MESSAGE: {exMsg}");
+                        return;
+                }
+            }
+
+            // Command to get the list of the shared drives
+            ProcessStartInfo processInfo = new()
+            {
+                FileName = "cmd.exe",
+                Arguments = $"/c net view {_computerName}",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using Process process = Process.Start(processInfo)!;
+            // Lecture de la sortie
+            string output = process!.StandardOutput.ReadToEnd();
+            string error = process.StandardError.ReadToEnd();
+
+            process.WaitForExit();
+
+            if (!string.IsNullOrWhiteSpace(error))
+            {
+                throw new(error);
+            }
+
+            // Selecting the lines that contain the shares
+            foreach (string line in output.Split('\n'))
+            {
+                // Suppression of unnecessary blank spaces
+                string trimmedLine = line.Trim();
+
+                // Verify if the line is not empty and not a header
+                if (!string.IsNullOrEmpty(trimmedLine) &&
+                    !trimmedLine.StartsWith("Ressources partagées") &&
+                    !trimmedLine.StartsWith("Nom du partage") &&
+                    !trimmedLine.StartsWith("La commande") &&
+                    !trimmedLine.StartsWith("-"))
+                {
+                    // Split the line into parts
+                    string[] parts = trimmedLine.Split([' '], StringSplitOptions.RemoveEmptyEntries);
+
+                    // Verify of the last part is a drive
+                    if (parts.Length > 1 && (parts[^1].Equals("Disque", StringComparison.OrdinalIgnoreCase) ||
+                                             parts[^1].Equals("(UNC)", StringComparison.OrdinalIgnoreCase)))
                     {
-                        // ERROR CODE 5: Access denied
-                        case 5:
-                            MessageBox.Show("Access denied", "ERROR", MessageBoxButton.OK, MessageBoxImage.Error);
-                            LoggingEvent("Connexion", Login, "Access denied");
-                            return;
-                        // ERROR CODE 53: The Host path was not found
-                        case 53:
-                            MessageBox.Show("The Host path was not found", "ERROR", MessageBoxButton.OK,
-                                MessageBoxImage.Error);
-                            LoggingEvent("Connexion", Login, "The Host path was not found");
-                            return;
-                        // ERROR CODE 1219: Multiple connections to a server or shared resource by the same user
-                        case 1219:
-                            exMsg = GetSystemMessage((uint)ex.NativeErrorCode);
-                            LoggingEvent("Connexion", Login, $"WARNING: ERROR CODE: {ex.NativeErrorCode}, ERROR MESSAGE: {exMsg}");
-                            break;
-                        // Other errors
-                        default:
-                            exMsg = GetSystemMessage((uint)ex.NativeErrorCode);
-                            MessageBox.Show(exMsg, "ERROR", MessageBoxButton.OK, MessageBoxImage.Error);
-                            LoggingEvent("Connexion", Login, $"ERROR CODE: {ex.NativeErrorCode}, ERROR MESSAGE: {exMsg}");
-                            return;
+                        // Show the drive in the list
+                        DriveList.Items.Add(parts[0]);
                     }
                 }
-                // Command to get the list of the shared drives
-                ProcessStartInfo processInfo = new()
-                {
-                    FileName = "cmd.exe",
-                    Arguments = $"/c net view {_computerName}",
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-
-                using Process process = Process.Start(processInfo)!;
-                // Lecture de la sortie
-                string output = process!.StandardOutput.ReadToEnd();
-                string error = process.StandardError.ReadToEnd();
-
-                process.WaitForExit();
-
-                if (!string.IsNullOrWhiteSpace(error))
-                {
-                    throw new(error);
-                }
-
-                // Selecting the lines that contain the shares
-                foreach (string line in output.Split('\n'))
-                {
-                    // Suppression of unnecessary blank spaces
-                    string trimmedLine = line.Trim();
-
-                    // Verify if the line is not empty and not a header
-                    if (!string.IsNullOrEmpty(trimmedLine) &&
-                        !trimmedLine.StartsWith("Ressources partagées") &&
-                        !trimmedLine.StartsWith("Nom du partage") &&
-                        !trimmedLine.StartsWith("La commande") &&
-                        !trimmedLine.StartsWith("-"))
-                    {
-                        // Split the line into parts
-                        string[] parts = trimmedLine.Split([' '], StringSplitOptions.RemoveEmptyEntries);
-
-                        // Verify of the last part is a drive
-                        if (parts.Length > 1 && (parts[^1].Equals("Disque", StringComparison.OrdinalIgnoreCase) ||
-                                                 parts[^1].Equals("(UNC)", StringComparison.OrdinalIgnoreCase)))
-                        {
-                            // Show the drive in the list
-                            DriveList.Items.Add(parts[0]);
-                        }
-                    }
-                }
-                // Connection successful
-                _connected = true;
-                ComputerName.IsEnabled = false;
-                LoginBox.Text = "";
-                PasswordBox.Password = "";
-                ConnectButton.IsEnabled = false;
-                DisconnectButton.IsEnabled = true;
-                MessageBox.Show($"Connexion to {_computerName} successful", "SUCCESS", MessageBoxButton.OK,
-                    MessageBoxImage.Information);
-                LoggingEvent("Connexion", Login, "Success");
             }
-            else
-            {
-                MessageBox.Show("Please fill all the fields", "WARNING", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
+
+            // Connection successful
+            _connected = true;
+            ComputerName.IsEnabled = false;
+            LoginBox.Text = "";
+            PasswordBox.Password = "";
+            ConnectButton.IsEnabled = false;
+            DisconnectButton.IsEnabled = true;
+            MessageBox.Show($"Connexion to {_computerName} successful", "SUCCESS", MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            LoggingEvent("Connexion", Login, "Success");
         }
         catch (Exception ex)
         {
@@ -546,6 +544,7 @@ public partial class MainWindow
                 MessageBoxImage.Error);
             LoggingEvent(exMsg, Login!, ex.StackTrace!);
         }
+
         _connected = false;
         DisconnectButton.IsEnabled = false;
         ConnectButton.IsEnabled = true;
@@ -582,6 +581,7 @@ public partial class MainWindow
                 MessageBox.Show("No Drive selected", "WARNING", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
+
             var selectedDrive = DriveList.SelectedItem.ToString();
 
 
